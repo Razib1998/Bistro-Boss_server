@@ -32,8 +32,8 @@ async function run() {
     const reviewsCollection = client.db("BistroBoss").collection("reviews");
 
     // Middlewares
+
     const verifyToken = (req, res, next) => {
-      console.log(req.headers);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "UnAuthorized Access" });
       }
@@ -46,6 +46,18 @@ async function run() {
         next();
       });
     };
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
     // jwt related API
 
     app.post("/jwt", async (req, res) => {
@@ -63,6 +75,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/menus", verifyToken, verifyAdmin, async (req, res) => {
+      const item = req.body;
+      const result = await menusCollection.insertOne(item);
+      res.send(result);
+    });
+
     // Users Related Api
 
     app.post("/users", async (req, res) => {
@@ -76,9 +94,23 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", verifyToken, async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
+    });
+
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden Access" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
     });
 
     app.patch("/users/admin/:id", async (req, res) => {
